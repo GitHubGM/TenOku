@@ -1,6 +1,17 @@
 services:
   web:
     build: .
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATA_DIR: /app/data
     ports:
-      - "8080:80"
+      - "8080:3000"
+    volumes:
+      - tenbilim-data:/app/data
     restart: unless-stopped
+
+volumes:
+  tenbilim-data:

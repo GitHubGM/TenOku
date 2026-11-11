@@ -1,6 +1,13 @@
-FROM nginx:stable-alpine
-COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
-COPY index.html styles.css /usr/share/nginx/html/
-COPY src /usr/share/nginx/html/src
-COPY assets /usr/share/nginx/html/assets
-EXPOSE 80
+FROM docker.io/library/node:22-bookworm-slim
+WORKDIR /app
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000 DATA_DIR=/app/data
+COPY --chown=node:node package.json server.mjs ./
+COPY --chown=node:node backend ./backend
+COPY --chown=node:node index.html styles.css ./
+COPY --chown=node:node src ./src
+COPY --chown=node:node assets ./assets
+RUN mkdir -p /app/data && chown node:node /app/data
+USER node
+VOLUME /app/data
+EXPOSE 3000
+CMD ["node", "server.mjs"]

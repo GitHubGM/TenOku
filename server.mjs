@@ -1,14 +1,14 @@
 import http from 'node:http';
-import {readFile} from 'node:fs/promises';
-import {resolve,extname,sep} from 'node:path';
-import {fileURLToPath} from 'node:url';
-const root=fileURLToPath(new URL('.',import.meta.url));
-const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml'};
-const port=Number(process.env.PORT||3000),host=process.env.HOST||'127.0.0.1';
-const server=http.createServer(async(req,res)=>{
- if(!['GET','HEAD'].includes(req.method)){res.writeHead(405,{'Allow':'GET, HEAD'});return res.end()}
- let pathname;try{pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname)}catch{res.writeHead(400);return res.end('Bad request')}
- const relative=pathname==='/'?'index.html':pathname.replace(/^\/+/,''),file=resolve(root,relative);
- if(!file.startsWith(root.endsWith(sep)?root:root+sep)||!(/^(index\.html|styles\.css|src\/[\w-]+\.js|assets\/[\w.-]+\.svg)$/.test(relative))){res.writeHead(404);return res.end('Not found')}
- try{const data=await readFile(file);res.writeHead(200,{'Content-Type':mime[extname(file)]||'application/octet-stream','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",'Cache-Control':'no-cache'});res.end(req.method==='HEAD'?undefined:data)}catch{res.writeHead(404);res.end('Not found')}
-});server.listen(port,host,()=>console.log(`TEÑ BILIM: http://${host}:${port}`));
+import {resolve} from 'node:path';
+import {pathToFileURL,fileURLToPath} from 'node:url';
+import {existsSync} from 'node:fs';
+import {createApp} from './backend/app.mjs';
+export {createApp} from './backend/app.mjs';
+if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
+ const envPath=fileURLToPath(new URL('.env',import.meta.url));if(existsSync(envPath))process.loadEnvFile(envPath);
+ const handler=createApp({dbPath:process.env.DATABASE_PATH||resolve(process.env.DATA_DIR||fileURLToPath(new URL('data/',import.meta.url)),'app.sqlite')});
+ const server=http.createServer(handler);server.requestTimeout=40000;server.headersTimeout=15000;
+ const port=Number(process.env.PORT||3000),host=process.env.HOST||'127.0.0.1';
+ server.listen(port,host,()=>console.log(`TEÑ BILIM: http://${host}:${port}`));
+ const stop=()=>server.close(()=>{handler.close();process.exit(0)});process.on('SIGTERM',stop);process.on('SIGINT',stop);
+}

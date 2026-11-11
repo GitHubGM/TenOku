@@ -1,5 +1,12 @@
 .git
+.idea
 node_modules
 dist
 .env
+.env.*
+data
+*.sqlite*
+*.db
+*.log
 test
+README.md

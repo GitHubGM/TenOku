@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {extraStrings,aiErrorKeys} from '../src/account-i18n.js';
 
 // Missing selectors return null; each render creates fresh nodes, like the browser.
 function createDocument() {
@@ -63,7 +64,18 @@ test('guest learning, account isolation, role workspaces, live tutor and logout'
  await click('nav',{page:'plan'});assert.ok(dom.html().includes('data-action="lesson" data-id="percent"'));assert.ok(!dom.html().includes('data-action="lesson" data-id="equations"'));assert.deepEqual(JSON.parse(storage.get('tenbilim.v1')).plan,['equations'],'server data must not overwrite guest cache');
  await click('nav',{page:'courses'});await click('lesson',{id:'equations'});await click('complete',{id:'equations'});const completion=calls.find(c=>c.path==='/progress/complete');assert.deepEqual(completion.body,{lessonId:'equations'});assert.equal(completion.headers['X-CSRF-Token'],'test-csrf');
  await click('nav',{page:'assignments'});assert.match(dom.html(),/Teacher assignment/);
- await click('nav',{page:'tutor'});await click('ask-topic',{id:'binary'});const chatCall=calls.find(c=>c.path==='/chat');assert.equal(chatCall.body.lang,'en');assert.deepEqual(chatCall.body.history,[]);assert.equal(chatCall.credentials,'same-origin');assert.match(dom.html(),/&lt;script&gt;unsafe\(\)&lt;\/script&gt;/);assert.ok(!dom.html().includes('<script>unsafe'));
+ await click('nav',{page:'tutor'});assert.ok(dom.html().includes(extraStrings.en.aiNote),'older sessions without aiProvider keep the OpenAI notice');await click('ask-topic',{id:'binary'});const chatCall=calls.find(c=>c.path==='/chat');assert.equal(chatCall.body.lang,'en');assert.deepEqual(chatCall.body.history,[]);assert.equal(chatCall.credentials,'same-origin');assert.match(dom.html(),/&lt;script&gt;unsafe\(\)&lt;\/script&gt;/);assert.ok(!dom.html().includes('<script>unsafe'));
+ for(const lang of ['kk','ru','en']){
+  language(lang);
+  for(const code of ['AI_AUTH_FAILED','AI_QUOTA_EXCEEDED','AI_MODEL_UNAVAILABLE','AI_CONNECTION_FAILED','AI_TIMEOUT']){
+   pendingChat={promise:Promise.resolve({ok:false,status:502,json:async()=>({code,error:'DO NOT DISPLAY provider details or secrets'})})};
+   await click('ask-topic',{id:'binary'});
+   assert.ok(dom.html().includes(extraStrings[lang][aiErrorKeys[code]]),`${lang}: ${code} has actionable text`);
+   assert.ok(!dom.html().includes('DO NOT DISPLAY'));
+   assert.ok(dom.findButton('logout'),'upstream authentication failure must not sign the student out');
+  }
+ }
+ language('en');
  pendingChat={};pendingChat.promise=new Promise(resolve=>{pendingChat.resolve=resolve});
  const oldChat=click('ask-topic',{id:'binary'});
  await click('logout');assert.ok(!dom.html().includes('Learner'));await click('nav',{page:'tutor'});assert.ok(!dom.html().includes('unsafe()'));assert.match(dom.html(),/Sign in to continue/);
@@ -75,4 +87,38 @@ test('guest learning, account isolation, role workspaces, live tutor and logout'
  await login('admin');assert.ok(dom.select('#create-user-form'));assert.ok(dom.select('#assignment-form'));assert.equal(document.querySelectorAll('[data-user-role]').length,3);
  dom.select('#roster-teacher').value='2';dom.select('#roster-teacher').onchange({target:dom.select('#roster-teacher')});assert.equal(dom.select('#roster-students').options[0].selected,true);
  await click('logout');assert.equal(dom.select('#create-user-form'),null);assert.equal(dom.select('#assignment-form'),null);assert.ok(!dom.html().includes('admin@example.test'));
+});
+
+test('local tutor uses its provider notice and localized errors without OpenAI setup advice',async()=>{
+ const dom=createDocument(),storage=new Map([['tenbilim.v1',JSON.stringify({lang:'en'})]]);
+ globalThis.document=dom.document;
+ globalThis.localStorage={getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)};
+ globalThis.location={hash:'#tutor'};
+ globalThis.window={scrollTo(){},addEventListener(){}};
+ const user={id:'local-student',name:'Local learner',email:'local@example.test',role:'student'};
+ let failure=null;
+ globalThis.fetch=async(url)=>{
+  if(url==='/api/session')return {ok:true,status:200,json:async()=>({user,csrfToken:'local-csrf',aiEnabled:true,aiProvider:'ollama'})};
+  if(url==='/api/progress')return {ok:true,status:200,json:async()=>({completed:[],dates:{},plan:[],attempts:[]})};
+  if(url==='/api/chat')return failure
+   ?{ok:false,status:503,json:async()=>({code:failure,error:'PRIVATE provider response'})}
+   :{ok:true,status:200,json:async()=>({reply:'A local answer.'})};
+  throw new Error(`Unexpected local tutor request ${url}`);
+ };
+ const {ready}=await import('../src/app.js?local-ollama-test');await ready;
+ const ask=async()=>{const button=dom.findButton('ask-topic',{id:'binary'});await dom.handlers.click({target:{closest:()=>button}})};
+ for(const lang of ['en','kk','ru']){
+  dom.select('#language').onchange({target:{value:lang}});
+  assert.ok(dom.html().includes(extraStrings[lang].localAI),'local model badge is translated');
+  assert.ok(dom.html().includes(extraStrings[lang].localAiNote),'local data handling and experimental status are visible');
+  assert.ok(!dom.html().includes(extraStrings[lang].aiNote),'cloud data handling notice is not shown for Ollama');
+  assert.equal(dom.select('#chat-input').disabled,false,'local tutor needs no OpenAI key');
+  for(const code of ['AI_LOCAL_UNAVAILABLE','AI_LOCAL_MODEL_MISSING','AI_LOCAL_BUSY','AI_LOCAL_INCOMPLETE','AI_LOCAL_SAFETY_UNAVAILABLE','AI_INVALID_RESPONSE','AI_TIMEOUT']){
+   failure=code;await ask();
+   assert.ok(dom.html().includes(extraStrings[lang][aiErrorKeys[code]]),`${lang}: ${code}`);
+   assert.ok(!dom.html().includes('PRIVATE provider response'));
+   assert.ok(dom.findButton('logout'),'local model errors keep the account signed in');
+  }
+ }
+ failure=null;await ask();assert.ok(dom.html().includes('A local answer.'));
 });

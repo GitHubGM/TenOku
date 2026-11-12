@@ -1,0 +1,21 @@
+# Linux Docker Engine + Ollama installed on the same host (including Snap).
+# Standalone file: use -f compose.ollama.yaml, not alongside compose.yaml.
+# Host networking reaches Ollama's loopback listener without publishing port 11434.
+services:
+  web:
+    build: .
+    env_file:
+      - .env
+    network_mode: host
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8080
+      DATA_DIR: /app/data
+      AI_PROVIDER: ollama
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://127.0.0.1:11434}
+    volumes:
+      - tenbilim-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  tenbilim-data:

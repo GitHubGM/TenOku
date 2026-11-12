@@ -74,7 +74,7 @@ snap services ollama
 sudo snap start --enable ollama
 ollama --version
 ollama pull qwen3:1.7b-q8_0
-ollama run qwen3:1.7b-q8_0 "Explain 2 + 2 in one short sentence. /no_think"
+ollama run --think=false qwen3:1.7b-q8_0 "Explain 2 + 2 in one short sentence."
 ollama ps
 ```
 
@@ -83,6 +83,34 @@ The exact model tag is [`qwen3:1.7b-q8_0`](https://ollama.com/library/qwen3:1.7b
 Look at `PROCESSOR` in `ollama ps` immediately after the test: `100% GPU` indicates GPU placement, `100% CPU` indicates CPU inference, and a split indicates partial GPU offload. A working response alone does not prove the RX 580 is being used. See the [Ollama FAQ](https://docs.ollama.com/faq#how-can-i-tell-if-my-model-was-loaded-onto-the-gpu).
 
 The RX 580 is not on Ollama's current supported ROCm list. [Ollama documents Vulkan support](https://docs.ollama.com/gpu#vulkan-gpu-support), but whether your installed Snap includes a usable Vulkan backend and can access this card must be checked on your machine. CPU inference is sufficient to test the app connection first. This project has not been benchmarked on your GPU.
+
+If host `vulkaninfo --summary` detects the RX 580 but Snap's startup logs show `OLLAMA_VULKAN:true`, a Vulkan library directory, and `initial_count=0`, Vulkan is already enabled: enabling it again will not resolve that discovery failure. CUDA library errors are NVIDIA backend probes, not instructions to install CUDA for an AMD card. The difference between host and Snap detection points to the packaged runtime or its environment; it does not establish the exact cause.
+
+You can test the [official Docker image's Vulkan backend](https://docs.ollama.com/docker#vulkan-support) separately. These commands assume the Snap log confirms the model directory `/var/snap/ollama/common/models`. They expose only loopback port 11435, leave Snap on 11434, and mount its existing models read-only. The Docker image must be downloaded, but the model is reused. Vulkan uses `/dev/dri`; this test does not require a ROCm `/dev/kfd` device.
+
+```bash
+sudo docker run -d --name tenoku-ollama-vulkan --pull=always \
+  --device /dev/dri \
+  -p 127.0.0.1:11435:11434 \
+  -e OLLAMA_HOST=0.0.0.0:11434 \
+  -e OLLAMA_VULKAN=1 \
+  -e OLLAMA_NO_CLOUD=1 \
+  -e OLLAMA_NOPRUNE=1 \
+  -e OLLAMA_CONTEXT_LENGTH=4096 \
+  -e OLLAMA_MODELS=/models \
+  --mount type=bind,source=/var/snap/ollama/common/models,target=/models,readonly \
+  docker.io/ollama/ollama:latest
+
+sudo docker exec tenoku-ollama-vulkan ollama run --think=false qwen3:1.7b-q8_0 "Say hello briefly."
+sudo docker exec tenoku-ollama-vulkan ollama ps
+sudo docker logs --tail=100 tenoku-ollama-vulkan
+```
+
+Inspect `ollama ps` and the logs for the actual RX 580 and GPU offload. A successful answer alone is not proof of acceleration. If the container is not ready yet, inspect its logs before retrying. A startup error about a read-only model directory means this runtime wants to modify the store; keep the original mount read-only and use a separate copy for further testing. Do not pull or delete models through this read-only test service.
+
+If GPU inference succeeds, set `OLLAMA_BASE_URL=http://127.0.0.1:11435` in TenOku's existing `.env`, then recreate the web service with `sudo docker compose -f compose.ollama.yaml up -d --force-recreate web` and run its AI diagnostic. This connection assumes Docker Engine and TenOku are on the same Linux host. The test container has no restart policy; it is not yet a permanent deployment. Stop it with `sudo docker stop tenoku-ollama-vulkan` when finished. Use `sudo docker start tenoku-ollama-vulkan` to reuse it; a second `docker run` with the same name will conflict. Removing this test container does not remove the Snap's read-only bind-mounted models. If the app was pointed at port 11435, restore its original URL and recreate it before stopping the test.
+
+Ollama's [CLI thinking controls](https://ollama.com/blog/thinking) include the explicit flag `--think=false`. A `/no_think` prompt is not a reliable substitute in every runtime. TenOku already sends `think: false` in its [native API requests](https://docs.ollama.com/capabilities/thinking).
 
 For a failed model download, service start, or CPU-only result, collect these diagnostics without posting your `.env`:
 

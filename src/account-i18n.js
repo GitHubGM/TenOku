@@ -4,11 +4,27 @@ const rows={
  syncing:['Жүктелуде…','Загрузка…','Loading…'],networkError:['Серверге қосылу мүмкін болмады. Қайталап көр.','Не удалось связаться с сервером. Попробуй снова.','Could not reach the server. Please try again.'],
  requestError:['Әрекет орындалмады. Енгізілген деректерді тексер.','Не удалось выполнить действие. Проверь введённые данные.','The action failed. Check the entered details.'],
  aiError:['AI қызметі жауап бермеді. Кейінірек қайталап көр немесе әкімшіге хабарлас.','AI сервис недоступен. Попробуй позже или обратись к администратору.','The AI service is unavailable. Try again later or contact the administrator.'],
+ aiAuthError:['OpenAI сұрауды растаған жоқ. Әкімші API кілтін, жоба рұқсаттарын және IP шектеулерін тексеруі керек.','OpenAI отклонил авторизацию. Администратору нужно проверить ключ API, права проекта и ограничения IP.','OpenAI rejected authentication. Ask the administrator to check the API key, project permissions and IP restrictions.'],
+ aiQuotaError:['OpenAI API қаражаты немесе пайдалану лимиті таусылған. Әкімші API төлемдері мен лимиттерін тексеруі керек.','Закончились средства или достигнут лимит OpenAI API. Администратору нужно проверить оплату и лимиты API.','The OpenAI API has reached a credit or usage limit. Ask the administrator to check API billing and limits.'],
+ aiRateError:['AI қызметі сұраулар жиілігін шектеді. Біраздан кейін қайталап көр.','AI сервис ограничил частоту запросов. Попробуй немного позже.','The AI service is limiting requests. Please try again shortly.'],
+ aiAccessError:['OpenAI қызметіне кіруге рұқсат жоқ. Әкімші API рұқсаттары мен қызметтің қолжетімділігін тексеруі керек.','Доступ к OpenAI отклонён. Администратору нужно проверить права API и доступность сервиса.','Access to OpenAI was denied. Ask the administrator to check API permissions and service availability.'],
+ aiModelError:['Таңдалған AI моделі табылмады немесе жобаға қолжетімсіз. Әкімші модель баптауын тексеруі керек.','Выбранная AI модель не найдена или недоступна проекту. Администратору нужно проверить настройку модели.','The configured AI model was not found or is unavailable to this project. Ask the administrator to check the model setting.'],
+ aiConfigError:['OpenAI сұрау баптауын қабылдамады. Әкімші AI интеграциясының баптауларын тексеруі керек.','OpenAI отклонил параметры запроса. Администратору нужно проверить настройки интеграции AI.','OpenAI rejected the request configuration. Ask the administrator to check the AI integration settings.'],
+ aiTimeoutError:['AI жауабын күту уақыты аяқталды. Қайта сұрап көр.','Время ожидания ответа AI истекло. Попробуй снова.','The AI request timed out. Please try again.'],
+ aiConnectionError:['Сервер AI қызметіне қосыла алмады. Әкімші сервердің желі баптауларын тексеруі керек.','Сервер не смог подключиться к AI сервису. Администратору нужно проверить сетевые настройки сервера.','The server could not connect to the AI service. Ask the administrator to check the server network settings.'],
+ aiResponseError:['AI қызметі толық мәтіндік жауап қайтармады. Сұрақты қысқартып, қайта сұрап көр.','AI сервис не вернул полный текстовый ответ. Попробуй задать более короткий вопрос.','The AI service did not return a complete text response. Please try a shorter question.'],
+ aiLocalUnavailable:['Жергілікті AI қызметіне қосылу мүмкін болмады. Әкімшіге хабарлас.','Не удалось подключиться к локальному AI. Обратись к администратору.','The local AI service could not be reached. Please contact the administrator.'],
+ aiLocalModelMissing:['Жергілікті AI моделі әлі орнатылмаған. Әкімші оны жүктеуі керек.','Локальная AI модель ещё не установлена. Администратору нужно её загрузить.','The local AI model is not installed yet. An administrator needs to download it.'],
+ aiLocalBusy:['Жергілікті AI басқа сұраққа жауап беріп жатыр. Біраздан кейін қайталап көр.','Локальный AI отвечает на другой вопрос. Попробуй немного позже.','The local AI is answering another question. Please try again shortly.'],
+ aiLocalIncomplete:['Жергілікті AI жауабын аяқтай алмады. Сұрақты қысқартып, қайта сұрап көр.','Локальный AI не смог закончить ответ. Попробуй задать более короткий вопрос.','The local AI could not finish its answer. Please try a shorter question.'],
+ aiLocalSafetyUnavailable:['Жауапты тексеру аяқталмады, сондықтан ол көрсетілмейді. Қайталап көр немесе әкімшіге хабарлас.','Проверка ответа не завершилась, поэтому он не показан. Попробуй снова или обратись к администратору.','The response check could not finish, so the answer was withheld. Please try again or contact the administrator.'],
  originError:['Сайт мекенжайы сервер баптауына сәйкес емес. Әкімші APP_ORIGIN мәнін тексеруі керек.','Адрес сайта не совпадает с настройкой сервера. Администратору нужно проверить APP_ORIGIN.','The site address does not match the server configuration. Ask the administrator to check APP_ORIGIN.'],
  csrfError:['Сеансты жаңарту үшін бетті қайта жүкте.','Обнови страницу, чтобы обновить сессию.','Reload the page to refresh your session.'],
  authRequired:['Жалғастыру үшін аккаунтыңа кір.','Войди в аккаунт, чтобы продолжить.','Sign in to continue.'],
- aiUnavailable:['AI көмекші әлі қосылмаған. Әкімші серверде API кілтін баптауы керек.','AI помощник пока не подключён. Администратору нужно настроить ключ API на сервере.','The AI assistant is not connected yet. An administrator needs to configure the API key on the server.'],
+ aiUnavailable:['AI көмекші әлі қосылмаған. Әкімші сервердегі AI баптауларын тексеруі керек.','AI помощник пока не подключён. Администратору нужно проверить настройки AI на сервере.','The AI assistant is not connected yet. An administrator needs to check the AI settings on the server.'],
  aiNote:['Хабарламаң мен осы чаттағы соңғы сұрақтар OpenAI-ға жіберіледі. Жеке деректерді жазба. AI қателесуі мүмкін: жауаптарды тексер.','Сообщение и недавняя история этого чата отправляются в OpenAI. Не указывай личные данные. AI может ошибаться: проверяй ответы.','Your message and recent chat history are sent to OpenAI. Do not share personal information. AI can make mistakes; check its answers.'],
+ localAiNote:['Бұл сынақтағы көмекші платформаның жергілікті AI серверінде жұмыс істейді. Хабарламалар OpenAI-ға жіберілмейді. Жергілікті модель мен оның тексерулері қателесуі мүмкін. Жеке деректерді жазба, жауаптарды тексер.','Этот экспериментальный помощник работает на локальном AI сервере платформы. Сообщения не отправляются в OpenAI. Модель и её проверки могут ошибаться. Не указывай личные данные и проверяй ответы.','This experimental tutor runs on the platform’s local AI server. Messages are not sent to OpenAI. The model and its checks can make mistakes. Do not share personal information; check its answers.'],
+ localAI:['Жергілікті AI · сынақ','Локальный AI · тест','Local AI · preview'],
  thinking:['Ойланып жатыр…','Думаю…','Thinking…'],liveAI:['AI','AI','AI'],
  noAi:['Қосылмаған','Не подключён','Not connected'],sessionExpired:['Сеанс аяқталды. Қайта кір.','Сессия истекла. Войди снова.','Your session expired. Please sign in again.'],
  credentialsError:['Email немесе құпиясөз қате.','Неверный email или пароль.','Incorrect email or password.'],emailExists:['Бұл email тіркелген.','Этот email уже зарегистрирован.','This email is already registered.'],rateLimited:['Сұраулар тым көп. Біраздан соң қайталап көр.','Слишком много запросов. Повтори чуть позже.','Too many requests. Please try again later.'],
@@ -19,3 +35,13 @@ const rows={
  adminGuard:['Соңғы әкімшіні бұғаттау немесе рөлін өзгерту мүмкін емес.','Нельзя заблокировать последнего администратора или изменить его роль.','The last active administrator cannot be disabled or demoted.']
 };
 export const extraStrings=Object.fromEntries(['kk','ru','en'].map((lang,i)=>[lang,Object.fromEntries(Object.entries(rows).map(([k,v])=>[k,v[i]]))]));
+
+export const aiErrorKeys = Object.freeze({
+ AI_NOT_CONFIGURED:'aiUnavailable', AI_AUTH_FAILED:'aiAuthError', AI_QUOTA_EXCEEDED:'aiQuotaError',
+ AI_RATE_LIMITED:'aiRateError', AI_ACCESS_DENIED:'aiAccessError', AI_MODEL_UNAVAILABLE:'aiModelError',
+ AI_BAD_REQUEST:'aiConfigError', AI_TIMEOUT:'aiTimeoutError', AI_CONNECTION_FAILED:'aiConnectionError',
+ AI_INVALID_RESPONSE:'aiResponseError', AI_UNAVAILABLE:'aiError', AI_BUSY:'aiRateError',
+ AI_LOCAL_UNAVAILABLE:'aiLocalUnavailable', AI_LOCAL_MODEL_MISSING:'aiLocalModelMissing',
+ AI_LOCAL_BUSY:'aiLocalBusy', AI_LOCAL_INCOMPLETE:'aiLocalIncomplete',
+ AI_LOCAL_SAFETY_UNAVAILABLE:'aiLocalSafetyUnavailable'
+});

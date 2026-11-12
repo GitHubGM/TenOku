@@ -1,8 +1,10 @@
 # TEÑ BILIM · Тең Білім
 
-A free learning platform for school students, with Kazakh, Russian and English interfaces and lesson content. This release adds a Node.js backend, persistent SQLite records, role-based accounts, and a server-side OpenAI tutor connection.
+A free learning platform for school students, with Kazakh, Russian and English interfaces and lesson content. It includes a Node.js backend, persistent SQLite records, role-based accounts, and a tutor that can use OpenAI or a local Ollama model.
 
 ## Docker Compose setup on your VM
+
+For the host-installed Ollama/Qwen option, follow [Local tutor: Ollama Snap + Qwen3-1.7B Q8_0](#local-tutor-ollama-snap--qwen3-17b-q8_0) and use its standalone Compose file. The commands in this section use the default bridged container configuration.
 
 From your project directory, prepare the server-only configuration. Create `.env` only if it does not already exist; keep an existing file so credentials and settings are preserved:
 
@@ -61,11 +63,94 @@ Public registration creates students only. Teachers and administrators are provi
 
 The original guest demo progress remains in its browser. It is not automatically imported into a registered student's account. Account progress is stored in SQLite and available on another device after login. Quizzes are scored on the server. The bundled questions remain learning material rather than a protected examination bank.
 
+## Local tutor: Ollama Snap + Qwen3-1.7B Q8_0
+
+This setup assumes **Ollama and Docker Engine run on the same Linux machine**. If Docker runs inside a VM, install Ollama in that VM for these loopback addresses to work. The VM needs GPU passthrough to use a physical RX 580; otherwise Ollama may use the CPU. No GPU device needs to be passed into the TenOku web container because inference runs in the host's Ollama service.
+
+### 1. Start your existing Snap installation and download the model
+
+```bash
+snap services ollama
+sudo snap start --enable ollama
+ollama --version
+ollama pull qwen3:1.7b-q8_0
+ollama run qwen3:1.7b-q8_0 "Explain 2 + 2 in one short sentence. /no_think"
+ollama ps
+```
+
+The exact model tag is [`qwen3:1.7b-q8_0`](https://ollama.com/library/qwen3:1.7b-q8_0), with a download of about 2.2 GB. It needs additional memory for conversation context and inference. Internet access is needed to download the model; generation with this downloaded model does not require OpenAI credits or an OpenAI key.
+
+Look at `PROCESSOR` in `ollama ps` immediately after the test: `100% GPU` indicates GPU placement, `100% CPU` indicates CPU inference, and a split indicates partial GPU offload. A working response alone does not prove the RX 580 is being used. See the [Ollama FAQ](https://docs.ollama.com/faq#how-can-i-tell-if-my-model-was-loaded-onto-the-gpu).
+
+The RX 580 is not on Ollama's current supported ROCm list. [Ollama documents Vulkan support](https://docs.ollama.com/gpu#vulkan-gpu-support), but whether your installed Snap includes a usable Vulkan backend and can access this card must be checked on your machine. CPU inference is sufficient to test the app connection first. This project has not been benchmarked on your GPU.
+
+For a failed model download, service start, or CPU-only result, collect these diagnostics without posting your `.env`:
+
+```bash
+snap list ollama
+snap connections ollama
+sudo snap logs ollama -n=50
+curl -fsS http://127.0.0.1:11434/api/version
+ss -ltn '( sport = :11434 )'
+```
+
+Keep Ollama bound to loopback (`127.0.0.1` or `::1`). If it is listening on `0.0.0.0` or `[::]`, restrict it before using student data. The [Snap package](https://snapcraft.io/ollama) is separately packaged, so use that package's supported settings rather than assuming a standard `ollama.service` unit or guessing `snap set` option names. Setting `OLLAMA_HOST` in TenOku's `.env` would not change the already-running Snap service. Do not publish port 11434 or use wildcard browser origins for this setup.
+
+### 2. Configure the existing TenOku `.env`
+
+Keep the current administrator credentials, database settings and `APP_ORIGIN`. Add or update:
+
+```dotenv
+AI_PROVIDER=ollama
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=qwen3:1.7b-q8_0
+OLLAMA_TIMEOUT_MS=120000
+```
+
+`OLLAMA_BASE_URL` is the server root, without `/api/chat`, credentials, query parameters or fragments. It is controlled by the server operator, never by students. An existing `OPENAI_API_KEY` is ignored in Ollama mode; there is no automatic cloud fallback. For native Node development on the same machine, these values also work with `npm start`.
+
+### 3. Rebuild using the Linux Ollama Compose file
+
+From the same project directory and Compose project name used for your existing deployment:
+
+```bash
+sudo docker compose -f compose.ollama.yaml up -d --build
+sudo docker compose -f compose.ollama.yaml ps
+sudo docker compose -f compose.ollama.yaml exec web npm run check:ai
+```
+
+Use **only** `-f compose.ollama.yaml` for this configuration; it is a complete standalone file, not an override to merge with `compose.yaml`. It retains the `web` service and `tenbilim-data` volume. If your earlier commands used `-p`, keep that same project name. Do not use `down -v` or copy the example over your existing `.env`.
+
+The web service uses [Linux host networking](https://docs.docker.com/engine/network/drivers/host/) to reach the Snap service on loopback. It listens on port **8080**, so the browser address and `APP_ORIGIN` can stay the same. There is no `ports:` mapping in this file. Docker shares the host network namespace in this mode; the ordinary bridged-container network isolation no longer applies. Ollama's port stays private.
+
+If a reverse proxy is already serving your site, change `HOST` in `compose.ollama.yaml` to `127.0.0.1` so only the proxy can reach port 8080. Keep your HTTPS origin and cookie settings. The port-mapping instruction in the HTTPS section below applies to the default `compose.yaml`; host networking uses this bind address instead.
+
+Continue using `-f compose.ollama.yaml` for subsequent updates, logs, diagnostics and restarts. A plain `docker compose up` selects the default bridged configuration again, where `127.0.0.1` refers to the web container rather than the host's Ollama service.
+
+### Local tutor behavior and limits
+
+The backend sends requests only to the configured Ollama endpoint. It uses the selected local model for an input safety check, the tutor answer and an output safety check. Failed or malformed checks withhold the answer. These small-model checks are **not equivalent to a dedicated moderation service** and can make mistakes; teacher review and testing in all three languages are necessary before broad student use.
+
+The app asks for non-thinking responses, limits context to 4096 tokens and answer generation to 700 tokens, and keeps recent history bounded. Only one local tutor request runs at a time per backend instance; simultaneous requests receive a busy message. Existing sign-in, CSRF protection, per-account daily limits and escaped answer rendering remain in place. Three local model calls per answer can take time on an older GPU or CPU. `OLLAMA_TIMEOUT_MS` applies to each call, not the entire three-call exchange.
+
+`npm run check:ai` follows the selected provider using a fixed arithmetic question. In Ollama mode it checks local input safety, generation and output safety without an OpenAI request or student data. It does not prove that the model uses your GPU or that all educational answers are accurate.
+
+| Diagnostic code | What to check |
+| --- | --- |
+| `AI_LOCAL_UNAVAILABLE` | Start the Snap service; check the host URL and the selected Compose file. |
+| `AI_LOCAL_MODEL_MISSING` | Run `ollama pull qwen3:1.7b-q8_0`; match `OLLAMA_MODEL` to the downloaded tag. |
+| `AI_LOCAL_BUSY` | Wait for the current question to finish, then retry. |
+| `AI_TIMEOUT` | Check service logs and CPU/GPU placement; the first model load can be slower. |
+| `AI_LOCAL_INCOMPLETE` | Ask a shorter question; the local model hit its response limit. |
+| `AI_LOCAL_SAFETY_UNAVAILABLE` | The local safety check did not return a valid decision; no answer was released. Check model compatibility and retry. |
+| `AI_INVALID_RESPONSE` | Check that the installed Ollama version supports this model, JSON schema output and `think: false`. |
+
 ## OpenAI tutor configuration
 
 Set these variables in the server's `.env`:
 
 ```dotenv
+AI_PROVIDER=openai
 OPENAI_API_KEY=your_key_here
 OPENAI_MODEL=gpt-4.1-mini
 ```
@@ -76,11 +161,47 @@ The placeholder above is not a valid key. Replace it locally on the server. Afte
 docker compose up -d --force-recreate
 ```
 
-For direct Node development, restart `npm start`. The browser sends messages to the app backend; only the backend calls OpenAI. The API key is never returned to the client. A configured API key requires API access and billing/quota on the provider account; an ordinary ChatGPT subscription does not supply the app's API credits.
+For direct Node development, restart `npm start`. The browser sends messages to the app backend; only the backend calls OpenAI. The API key is never returned to the client. A configured API key requires API access and available credits or billing/quota on the provider account. Check the API billing dashboard separately from ChatGPT usage.
 
 The tutor uses input/output moderation, the Responses API, request limits and bounded output. `AI_DAILY_LIMIT` defaults to 50 requests per account per day, including failed provider requests, and is retained in SQLite until the next UTC day. An additional short-window limit is held in memory and resets when the server restarts. Configure provider-side project budgets as well. It sends the question and recent chat context to OpenAI; do not include personal or sensitive student information in prompts. AI replies may be incorrect and should be checked against course materials. Without a configured key, the app indicates the tutor is unavailable rather than pretending a live model answered. A real API key is required to verify end-to-end provider connectivity; no key is bundled.
 
 Before a school-wide rollout, the operator must configure appropriate access and consent for the students' ages and applicable requirements. OpenAI's [under-18 guidance](https://developers.openai.com/api/docs/guides/safety-checks/under-18-api-guidance) requires Zero Data Retention before processing personal data of children under 13 or the applicable age of digital consent. `store: false` is not Zero Data Retention. This starter does not implement an age-verification or parental-consent workflow.
+
+### Troubleshooting a failed AI request
+
+First confirm that the running container received a key, without displaying it:
+
+```bash
+docker compose exec web node -e "console.log('OPENAI_API_KEY configured:', Boolean(process.env.OPENAI_API_KEY?.trim()))"
+```
+
+If this prints `false`, edit the existing server `.env` and recreate the container. A plain `docker compose restart` does not reload changed environment variables. Do not replace an existing `.env` with the example or post the key in diagnostic output.
+
+After updating the project source, build the image containing the diagnostic script and reload the configuration:
+
+```bash
+docker compose up -d --build --force-recreate web
+docker compose exec web node scripts/check-ai.mjs
+```
+
+For direct Node development, run `npm run check:ai`. This explicit diagnostic sends only a fixed arithmetic prompt, then checks input moderation, text generation, and output moderation. It consumes a small amount of API usage and does not print the API key, generated answer, or raw provider errors. It exits successfully only when all three checks pass. It does not use student data or create a student account.
+
+| Diagnostic code | What to check |
+| --- | --- |
+| `AI_NOT_CONFIGURED` | Set the server key and recreate the container. |
+| `AI_AUTH_FAILED` | The key is invalid, revoked, or not accepted. Replace it privately on the server. |
+| `AI_QUOTA_EXCEEDED` | Check API billing, available credits, expiry dates and project quota. |
+| `AI_ACCESS_DENIED` | Check that the key's project has permission to call Responses and Moderations. |
+| `AI_MODEL_UNAVAILABLE` | Select an `OPENAI_MODEL` available to that API project. |
+| `AI_RATE_LIMITED` | Wait and retry; check request/token limits. |
+| `AI_CONNECTION_FAILED` / `AI_TIMEOUT` | Check VM DNS, certificates, firewall and outbound HTTPS access to `api.openai.com`. |
+| `AI_BAD_REQUEST` / `AI_INVALID_RESPONSE` | Check model compatibility, update the application, and check provider service status. |
+| `AI_INCOMPLETE_RESPONSE` | OpenAI was reachable but did not finish the text. Check model compatibility and output-token requirements; this is not an invalid-key error. |
+| `AI_CONTENT_BLOCKED` | The moderation check blocked the diagnostic; no generated content is logged. |
+| `AI_MODEL_CONFIG_INVALID` | Correct the model identifier in `.env`; no invalid value is printed. |
+| `AI_UNAVAILABLE` | Retry later; provide only the safe diagnostic code when requesting support. |
+
+If the diagnostic passes but the browser still fails, check the browser's displayed error code, sign-in session, and `APP_ORIGIN` configuration. The diagnostic isolates provider access; it does not bypass or validate the application's account, CSRF, or per-user quota checks.
 
 ## HTTPS production setup
 
@@ -130,6 +251,8 @@ docker compose ps
 docker compose logs --tail=50 web
 ```
 
+For the Linux Ollama setup, include `-f compose.ollama.yaml` in each command above so the service keeps its host-network connection to Ollama.
+
 Keep the existing `.env` file and `tenbilim-data` volume. Do not copy `.env.example` over your settings or run `docker compose down -v` during an update; that command deletes the data volume. Never commit a real API key; if one was exposed, revoke it and create a replacement.
 
 ## Project structure
@@ -144,6 +267,7 @@ backend/            Database, authentication and protected operations
 styles.css          Responsive styling and keyboard focus behavior
 assets/             Vector branding
 scripts/build.mjs   Frontend asset export
+scripts/check-ai.mjs Safe operator-only AI connectivity diagnostic
 test/               Automated checks
 deploy/nginx.conf   HTTPS reverse-proxy location example
 .env.example        Server configuration template, without secrets

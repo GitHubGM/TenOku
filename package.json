@@ -1,6 +1,6 @@
 {
   "name": "ten-bilim", "version": "2.0.0", "private": true, "type": "module",
   "description": "Free trilingual learning platform for school students",
-  "scripts": {"start": "node --env-file-if-exists=.env server.mjs", "dev": "node --env-file-if-exists=.env server.mjs", "test": "node --test", "build": "node scripts/build.mjs"},
+  "scripts": {"start": "node --env-file-if-exists=.env server.mjs", "dev": "node --env-file-if-exists=.env server.mjs", "test": "node --test", "build": "node scripts/build.mjs", "check:ai": "node --env-file-if-exists=.env scripts/check-ai.mjs"},
   "engines": {"node": ">=22.14.0"}
 }

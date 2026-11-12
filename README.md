@@ -2,22 +2,23 @@
 
 A free learning platform for school students, with Kazakh, Russian and English interfaces and lesson content. This release adds a Node.js backend, persistent SQLite records, role-based accounts, and a server-side OpenAI tutor connection.
 
-## Quick start on your VM
+## Docker Compose setup on your VM
 
-From your project directory, prepare the server-only configuration:
+From your project directory, prepare the server-only configuration. Create `.env` only if it does not already exist; keep an existing file so credentials and settings are preserved:
 
 ```bash
-cp .env.example .env
+if [ ! -e .env ]; then cp .env.example .env; fi
 chmod 600 .env
 nano .env
 ```
 
-Set `ADMIN_EMAIL` and a unique `ADMIN_PASSWORD` (12-128 characters). A long random password containing letters, digits, hyphens and underscores avoids quoting differences between Node, Compose and Podman env files. For Node/Compose-only setups, single-quote a password containing spaces or `$`/`#`; Podman's `--env-file` may treat those quotes literally, so use the portable character set when sharing the same file. Set `APP_ORIGIN` to the exact address you will open, for example `http://YOUR_VM_IP:8080`. Keep `COOKIE_SECURE=false` for this HTTP development address. Add your own `OPENAI_API_KEY` if you want the live tutor, otherwise leave it empty. Never paste the key into chat, frontend JavaScript, or GitHub.
+Set `ADMIN_EMAIL` and a unique `ADMIN_PASSWORD` (12-128 characters) for the first administrator. Single-quote a password containing spaces or `$`/`#` in `.env`. Set `APP_ORIGIN` to the exact address students will open, including the scheme and port, for example `http://YOUR_VM_IP:8080`; replace `YOUR_VM_IP` with your actual address. Keep `COOKIE_SECURE=false` for this HTTP development address, or use the HTTPS settings below for a public deployment. Add your own `OPENAI_API_KEY` if you want the live tutor, otherwise leave it empty. Keep both the administrator password and API key private in the server's `.env`; never paste them into chat, frontend JavaScript, or GitHub.
 
-Build and launch with Docker:
+Build and launch with Docker Compose:
 
 ```bash
 docker compose up -d --build
+docker compose ps
 docker compose logs --tail=50 web
 ```
 
@@ -25,27 +26,12 @@ Use `sudo docker ...` if your VM requires it. Open `http://YOUR_VM_IP:8080`. Log
 
 The named `tenbilim-data` volume retains accounts, sessions, progress and assignments across container rebuilds. Do not delete that volume when updating. This release replaces the old static Nginx container, so rebuilding is required.
 
-## Podman alternative
-
-Podman can build the same Dockerfile. From the project directory, after creating `.env`:
-
-```bash
-podman build -t localhost/ten-bilim .
-podman volume create tenbilim-data
-podman run -d --name ten-bilim --env-file .env \
-  -e HOST=0.0.0.0 -e PORT=3000 -e DATA_DIR=/app/data \
-  -p 8080:3000 -v tenbilim-data:/app/data localhost/ten-bilim
-podman logs ten-bilim
-```
-
-If a container named `ten-bilim` already exists, stop it before replacing that container; preserve its data volume. `podman compose up -d --build` is also available when you have a working Compose provider. Rootless Podman boot persistence depends on your host setup; configure a user systemd/Quadlet service if required.
-
 ## Local development
 
 Requires Node.js **22.14 or newer** with built-in `node:sqlite`. There are no npm dependencies to install.
 
 ```bash
-cp .env.example .env
+if [ ! -e .env ]; then cp .env.example .env; fi
 ```
 
 For local development, set `APP_ORIGIN=http://localhost:3000`, `HOST=127.0.0.1`, `PORT=3000`, and your initial admin credentials in `.env`. Then:
@@ -136,7 +122,15 @@ git commit -m "Add accounts, backend and AI tutor"
 git push
 ```
 
-After pulling updates on the server, use `docker compose up -d --build`. Keep the `.env` file and existing volume. Never commit a real API key; if one was exposed, revoke it and create a replacement.
+After pulling updates on the server, rebuild and check the service:
+
+```bash
+docker compose up -d --build
+docker compose ps
+docker compose logs --tail=50 web
+```
+
+Keep the existing `.env` file and `tenbilim-data` volume. Do not copy `.env.example` over your settings or run `docker compose down -v` during an update; that command deletes the data volume. Never commit a real API key; if one was exposed, revoke it and create a replacement.
 
 ## Project structure
 

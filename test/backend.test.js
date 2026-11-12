@@ -290,8 +290,8 @@ test('daily AI limit survives database reopening and resets at UTC midnight',asy
   assert.equal(modelCalls,2);
 });
 
-const ollamaResponse = content => new Response(JSON.stringify({
-  message:{role:'assistant',content,thinking:'private reasoning must not be returned'},done:true,done_reason:'stop'
+const ollamaResponse = (content,overrides={}) => new Response(JSON.stringify({
+  message:{role:'assistant',content,thinking:'private reasoning must not be returned'},done:true,done_reason:'stop',...overrides
 }),{status:200,headers:{'Content-Type':'application/json'}});
 
 test('local tutor works without a key and keeps all three calls local and server-controlled',async t=>{
@@ -317,6 +317,7 @@ test('local tutor works without a key and keeps all three calls local and server
   assert.equal(result.status,200,result.text);
   assert.deepEqual(result.json,{reply:'Two plus two is four.'});
   assert.equal(calls.length,3);
+  assert.deepEqual(calls.map(call=>call.body.options.num_predict),[64,1536,64]);
   for(const call of calls){
     assert.equal(call.url,'http://127.0.0.1:11434/api/chat');
     assert.equal(call.options.headers.Authorization,undefined);
@@ -331,6 +332,78 @@ test('local tutor works without a key and keeps all three calls local and server
   assert.equal(calls[0].body.format.type,'object');
   assert.equal(calls[1].body.format,undefined);
   assert.equal(calls[2].body.format.type,'object');
+});
+
+test('local tutor can complete beyond 700 tokens and still checks the full answer before release',async t=>{
+  const generated='Complete local answer sentinel.';
+  for(const outputSafe of [true,false]){
+    const calls=[];
+    const {request,register}=await fixture(t,{env:{AI_PROVIDER:'ollama'},fetchImpl:async(url,options)=>{
+      assert.equal(url,'http://127.0.0.1:11434/api/chat');
+      const body=JSON.parse(options.body);calls.push(body);
+      if(calls.length===1)return ollamaResponse('{"safe":true}');
+      if(calls.length===2)return ollamaResponse(generated,{
+        eval_count:900,done_reason:body.options.num_predict>=900?'stop':'length'
+      });
+      assert.equal(calls.length,3,'Only input, generation and output-check calls are allowed');
+      assert.ok(body.format);
+      assert.deepEqual(JSON.parse(body.messages[1].content),{
+        stage:'tutor output',question:'Explain this lesson briefly.',reply:generated
+      });
+      return ollamaResponse(JSON.stringify({safe:outputSafe}));
+    }});
+    const student=await register();
+    const result=await request('/api/chat',{method:'POST',user:student,body:{message:'Explain this lesson briefly.',lang:'en'}});
+    assert.equal(result.status,200,result.text);
+    assert.equal(calls.length,3);
+    if(outputSafe)assert.deepEqual(result.json,{reply:generated});
+    else{
+      assert.match(result.json.reply,/safe way/);
+      assert.ok(!result.text.includes(generated));
+    }
+  }
+});
+
+test('local tutor withholds truncated generation without retrying or checking a partial answer',async t=>{
+  const calls=[];
+  const partial='Private incomplete answer sentinel';
+  const {request,register}=await fixture(t,{env:{AI_PROVIDER:'ollama'},fetchImpl:async(url,options)=>{
+    assert.equal(url,'http://127.0.0.1:11434/api/chat');
+    const body=JSON.parse(options.body);calls.push(body);
+    if(calls.length===1)return ollamaResponse('{"safe":true}');
+    assert.equal(calls.length,2,'Truncated generation must end the tutor request');
+    return ollamaResponse(partial,{done_reason:'length',eval_count:1536});
+  }});
+  const student=await register();
+  const result=await request('/api/chat',{method:'POST',user:student,body:{message:'Explain this lesson.',lang:'en'}});
+  assert.equal(result.status,502,result.text);
+  assert.equal(result.json.code,'AI_LOCAL_INCOMPLETE');
+  assert.equal(result.json.reply,undefined);
+  assert.ok(!result.text.includes(partial));
+  assert.equal(calls.length,2);
+});
+
+test('local tutor treats truncated input and output decisions as failed safety checks',async t=>{
+  for(const truncatedAt of [1,3]){
+    let count=0;
+    const generated='Unchecked local answer sentinel';
+    const {request,register}=await fixture(t,{env:{AI_PROVIDER:'ollama'},fetchImpl:async(url,options)=>{
+      assert.equal(url,'http://127.0.0.1:11434/api/chat');
+      const body=JSON.parse(options.body);count++;
+      if(count===truncatedAt){
+        assert.ok(body.format);
+        return ollamaResponse('{"safe":true}',{done_reason:'length',eval_count:64});
+      }
+      return ollamaResponse(count===2?generated:'{"safe":true}');
+    }});
+    const student=await register();
+    const result=await request('/api/chat',{method:'POST',user:student,body:{message:'Explain this lesson.',lang:'en'}});
+    assert.equal(result.status,502,result.text);
+    assert.equal(result.json.code,'AI_LOCAL_SAFETY_UNAVAILABLE');
+    assert.equal(result.json.reply,undefined);
+    assert.ok(!result.text.includes(generated));
+    assert.equal(count,truncatedAt);
+  }
 });
 
 test('local tutor withholds blocked input and output, including when an OpenAI key is configured',async t=>{

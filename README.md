@@ -159,7 +159,7 @@ Continue using `-f compose.ollama.yaml` for subsequent updates, logs, diagnostic
 
 The backend sends requests only to the configured Ollama endpoint. It uses the selected local model for an input safety check, the tutor answer and an output safety check. Failed or malformed checks withhold the answer. These small-model checks are **not equivalent to a dedicated moderation service** and can make mistakes; teacher review and testing in all three languages are necessary before broad student use.
 
-The app asks for non-thinking responses, limits context to 4096 tokens and answer generation to 700 tokens, and keeps recent history bounded. Only one local tutor request runs at a time per backend instance; simultaneous requests receive a busy message. Existing sign-in, CSRF protection, per-account daily limits and escaped answer rendering remain in place. Three local model calls per answer can take time on an older GPU or CPU. `OLLAMA_TIMEOUT_MS` applies to each call, not the entire three-call exchange.
+The app asks for non-thinking responses of at most 120 words, limits context to 4096 tokens and answer generation to 1536 tokens, and keeps recent history bounded. The word limit is a model instruction; the token limit is enforced by Ollama. Each safety check remains limited to 64 tokens. Incomplete answers are withheld rather than displayed. Only one local tutor request runs at a time per backend instance; simultaneous requests receive a busy message. Existing sign-in, CSRF protection, per-account daily limits and escaped answer rendering remain in place. Three local model calls per answer can take time on an older GPU or CPU. `OLLAMA_TIMEOUT_MS` applies to each call, not the entire three-call exchange.
 
 `npm run check:ai` follows the selected provider using a fixed arithmetic question. In Ollama mode it checks local input safety, generation and output safety without an OpenAI request or student data. It does not prove that the model uses your GPU or that all educational answers are accurate.
 
@@ -169,7 +169,7 @@ The app asks for non-thinking responses, limits context to 4096 tokens and answe
 | `AI_LOCAL_MODEL_MISSING` | Run `ollama pull qwen3:1.7b-q8_0`; match `OLLAMA_MODEL` to the downloaded tag. |
 | `AI_LOCAL_BUSY` | Wait for the current question to finish, then retry. |
 | `AI_TIMEOUT` | Check service logs and CPU/GPU placement; the first model load can be slower. |
-| `AI_LOCAL_INCOMPLETE` | Ask a shorter question; the local model hit its response limit. |
+| `AI_LOCAL_INCOMPLETE` | The answer generation stopped at its length limit. Rebuild the web image if it still uses the old 700-token limit; the current limit is 1536. If it persists, try a narrower question and check for repetitive generation. Increasing the timeout alone does not increase the token limit. |
 | `AI_LOCAL_SAFETY_UNAVAILABLE` | The local safety check did not return a valid decision; no answer was released. Check model compatibility and retry. |
 | `AI_INVALID_RESPONSE` | Check that the installed Ollama version supports this model, JSON schema output and `think: false`. |
 

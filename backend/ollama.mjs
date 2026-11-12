@@ -1,5 +1,7 @@
 // Local inference only: the endpoint and model are administrator configuration.
 // Never log prompts, raw provider errors, endpoint URLs, or credentials.
+export const LOCAL_ANSWER_TOKENS = 1536;
+
 const errors = {
   AI_LOCAL_UNAVAILABLE: [502, 'The server could not reach the local AI service. Ask the administrator to check Ollama and its connection.'],
   AI_LOCAL_MODEL_MISSING: [503, 'The local AI model is not installed. Ask the administrator to download the configured Ollama model.'],
@@ -57,12 +59,12 @@ export function createOllamaClient({
   }
   const timeout = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 120000;
 
-  return async function request({messages, format, maxTokens = 700, temperature = 0.7} = {}) {
+  return async function request({messages, format, maxTokens = LOCAL_ANSWER_TOKENS, temperature = 0.7} = {}) {
     if (!Array.isArray(messages) || !messages.length || messages.some(message =>
       !message || !['system', 'user', 'assistant'].includes(message.role) || typeof message.content !== 'string')) {
       throw new OllamaError('AI_INVALID_RESPONSE');
     }
-    const numPredict = Number.isFinite(maxTokens) ? Math.min(700, Math.max(1, Math.floor(maxTokens))) : 700;
+    const numPredict = Number.isFinite(maxTokens) ? Math.min(LOCAL_ANSWER_TOKENS, Math.max(1, Math.floor(maxTokens))) : LOCAL_ANSWER_TOKENS;
     const samplingTemperature = Number.isFinite(temperature) ? Math.min(2, Math.max(0, temperature)) : 0.7;
     const payload = {
       model: modelName,

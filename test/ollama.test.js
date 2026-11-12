@@ -25,7 +25,7 @@ test('Ollama sends a bounded local chat request without cloud authorization or t
   assert.equal(body.think, false);
   assert.equal(body.stream, false);
   assert.equal(body.options.num_ctx, 4096);
-  assert.equal(body.options.num_predict, 700);
+  assert.equal(body.options.num_predict, 1536);
   assert.deepEqual(body.messages, input.messages);
 });
 
